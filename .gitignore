@@ -1,0 +1,7 @@
+__pycache__/
+data/
+model/
+wandb/
+runs/
+
+test_exp/

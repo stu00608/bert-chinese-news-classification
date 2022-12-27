@@ -1,10 +1,12 @@
 import os
+import wandb
 import numpy as np
 from datasets import Dataset, load_metric
 from transformers import (AutoModelForSequenceClassification,
                           AutoTokenizer,
                           TrainingArguments,
-                          Trainer)
+                          Trainer,
+                          set_seed)
 
 path = "./data/toutiao_cat_data.txt"
 
@@ -27,10 +29,16 @@ label2tag = {
 }
 tag2label = {v: k for k, v in label2tag.items()}
 n_labels = len(label2tag)
+
+
 max_length = 30
+seed = 1520
+runs_path = "./runs"
+model_name = "voidful/albert_chinese_tiny"
 
 
 def tokenize_fn(examples):
+    global tokenizer
     return tokenizer(
         examples["texts"],
         add_special_tokens=True,
@@ -40,25 +48,49 @@ def tokenize_fn(examples):
 
 
 def compute_metrics(eval_pred):
+    global metric
     logits, labels = eval_pred
     predictions = np.argmax(logits, axis=-1)
     return metric.compute(predictions=predictions, references=labels)
 
 
-if __name__ == "__main__":
-
-    tokenizer = AutoTokenizer.from_pretrained(
-        "voidful/albert_chinese_tiny", model_max_length=max_length)
+def main(dataset, **kwargs):
     model = AutoModelForSequenceClassification.from_pretrained(
-        "voidful/albert_chinese_tiny",
+        kwargs["model_name"],
         num_labels=n_labels,
     )
 
-    # TODO: Adjustable export path
-    # TODO: TrainingArguments setting.
     training_args = TrainingArguments(
-        output_dir="test_exp", evaluation_strategy="epoch")
-    metric = load_metric("accuracy")
+        output_dir=os.path.join(runs_path, kwargs["name"]),
+        evaluation_strategy="epoch",
+        num_train_epochs=kwargs["epoch"],
+        per_device_train_batch_size=kwargs["batch_size"],
+        run_name=kwargs["name"]
+    )
+
+    all_dataset = dataset
+    all_dataset = all_dataset.map(tokenize_fn, batched=True)
+
+    if kwargs["data_size"] != 0:
+        dataset = Dataset.from_dict(dataset[:kwargs["data_size"]])
+
+    dataset = dataset.map(tokenize_fn, batched=True)
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=dataset,
+        eval_dataset=all_dataset,
+        compute_metrics=compute_metrics,
+    )
+
+    trainer.train()
+
+
+if __name__ == "__main__":
+
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name, model_max_length=max_length)
 
     texts = []
     labels = []
@@ -72,15 +104,14 @@ if __name__ == "__main__":
             labels.append(label)
 
     dataset = Dataset.from_dict({"texts": texts, "labels": labels})
+    dataset = dataset.shuffle(seed=seed)
 
-    tokenized_dataset = dataset.map(tokenize_fn, batched=True)
+    metric = load_metric("accuracy")
 
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=tokenized_dataset,
-        eval_dataset=tokenized_dataset,
-        compute_metrics=compute_metrics,
-    )
+    data_size = 200000
+    batch_size = 8
+    epoch = 20
 
-    trainer.train()
+    main(dataset, name=f"exp_val_all_e_{epoch}_b_{batch_size}_d_{data_size}",
+         data_size=data_size, epoch=epoch, batch_size=batch_size, model_name=model_name)
+    wandb.finish()

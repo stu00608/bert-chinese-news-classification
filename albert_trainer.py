@@ -65,7 +65,8 @@ def main(dataset, **kwargs):
         evaluation_strategy="epoch",
         num_train_epochs=kwargs["epoch"],
         per_device_train_batch_size=kwargs["batch_size"],
-        run_name=kwargs["name"]
+        run_name=kwargs["name"],
+        save_strategy="no"
     )
 
     all_dataset = dataset

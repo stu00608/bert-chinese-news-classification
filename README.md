@@ -8,8 +8,7 @@
 * You need a wandb account and get the api key.
 
 ```
-export WANDB_API_KEY=<your wandb api key>
-docker build --no-cache -t albert_news_classification --build-arg WANDB_API_KEY=$WANDB_API_KEY .
+docker build --no-cache -t albert_news_classification --build-arg WANDB_API_KEY=<your wandb api key> .
 
 docker run --rm -it --gpus all albert_news_classification python3 albert_trainer.py
 
